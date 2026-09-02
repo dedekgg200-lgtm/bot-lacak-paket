@@ -1,1 +1,13 @@
-
+{
+  "name": "bot-rekap-data",
+  "version": "1.0.0",
+  "description": "Bot Telegram untuk menyimpan dan merekap data paket",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0",
+    "sqlite3": "^5.1.7"
+  }
+}
