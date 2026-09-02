@@ -95,19 +95,12 @@ bot.on("message", (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
 
-    if (userId !== OWNER_ID) {
-        return;
-    }
-
-    if (!msg.text) {
-        return;
-    }
+    if (userId !== OWNER_ID) return;
+    if (!msg.text) return;
 
     const text = msg.text;
 
-    if (text === "/start") {
-        return;
-    }
+    if (text === "/start") return;
 
     if (text === "📋 Ambil Rekapan") {
         db.all(
@@ -225,9 +218,7 @@ bot.on("callback_query", async (query) => {
         });
     }
 
-    if (!query.data.startsWith("ambil_")) {
-        return;
-    }
+    if (!query.data.startsWith("ambil_")) return;
 
     const jumlah = Number(
         query.data.replace("ambil_", "")
@@ -246,28 +237,30 @@ bot.on("callback_query", async (query) => {
 
             try {
                 for (const data of rows) {
+
+                    // ✅ TEMPLATE PESAN SUDAH DIGANTI
                     const rekap =
-`<b>Halo Kak</b>
+`Halo kk
+Kami dari *Sicepat*
+Penyedia ekspedisi pengiriman *SiCepat Xpress*
+mau konfirmasi Pesanan di *Shopee.id.com*
 
-Kami ingin mengonfirmasi paket dengan data berikut:
+*Nomor Resi*: ${data.resi}
+*Nama penerima*: ${data.penerima}
+*Nama pengirim/toko*: ${data.pengirim}
+*Alamat*: ${data.alamat}
 
-<b>Nomor Resi</b>: ${data.resi}
-<b>Nama Penerima</b>: ${data.penerima}
-<b>Nama Pengirim/Toko</b>: ${data.pengirim}
-<b>Alamat</b>: ${data.alamat}
+*Kami informasikan Paket saat ini tidak dapat di lanjut ke alamat Anda, karena kesalahan proses input nomor resi oleh tim ekspedisi, sehingga paket tertukar dengan customer lain*
 
-Terima kasih.`;
+*Bisa di screenshot dari total harga yang dibayar berapa untuk diproses pengembalian dana*
 
-                    // Kirim rekap terlebih dahulu
+"Elevate Your Style with *shopee Indonesia.id.com*!"`;
+
                     await bot.sendMessage(
                         chatId,
-                        rekap,
-                        {
-                            parse_mode: "HTML"
-                        }
+                        rekap
                     );
 
-                    // Nomor HP dikirim sebagai pesan terpisah
                     if (data.telepon) {
                         await bot.sendMessage(
                             chatId,
@@ -275,14 +268,16 @@ Terima kasih.`;
                         );
                     }
 
-                    // Hapus hanya setelah berhasil dikirim
                     await new Promise((resolve, reject) => {
                         db.run(
                             "DELETE FROM paket WHERE id = ?",
                             [data.id],
                             function (err) {
-                                if (err) reject(err);
-                                else resolve();
+                                if (err) {
+                                    reject(err);
+                                } else {
+                                    resolve();
+                                }
                             }
                         );
                     });
