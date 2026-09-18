@@ -4,15 +4,10 @@ const TelegramBot = require("node-telegram-bot-api");
 const sqlite3 = require("sqlite3").verbose();
 
 const TOKEN = process.env.BOT_TOKEN;
-
-// Ambil banyak OWNER ID dari Railway
-const OWNER_IDS = (process.env.OWNER_IDS || "")
-  .split(",")
-  .map(id => id.trim())
-  .filter(Boolean);
+const OWNER_ID = process.env.OWNER_ID;
 
 if (!TOKEN) {
-  console.log("❌ BOT_TOKEN belum diatur di Railway");
+  console.log("BOT_TOKEN belum diatur di file .env");
   process.exit(1);
 }
 
@@ -20,18 +15,10 @@ const bot = new TelegramBot(TOKEN, {
   polling: true
 });
 
-// ==============================
-// DATABASE
-// ==============================
+// Membuat database
+const db = new sqlite3.Database("./data.db");
 
-const db = new sqlite3.Database("./data.db", (err) => {
-  if (err) {
-    console.log("❌ Gagal membuka database:", err.message);
-  } else {
-    console.log("✅ Database berhasil dibuka");
-  }
-});
-
+// Membuat tabel data
 db.run(`
   CREATE TABLE IF NOT EXISTS data (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,20 +31,8 @@ db.run(`
 `);
 
 console.log("🤖 Bot Rekap Data berhasil dijalankan");
-console.log(`👥 Jumlah Owner/Admin: ${OWNER_IDS.length}`);
 
-// ==============================
-// CEK OWNER
-// ==============================
-
-function isOwner(userId) {
-  return OWNER_IDS.includes(String(userId));
-}
-
-// ==============================
-// START
-// ==============================
-
+// Perintah /start
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
 
@@ -80,16 +55,13 @@ Kirim data tersebut dalam satu pesan.
   });
 });
 
-// ==============================
-// MENERIMA PESAN
-// ==============================
-
+// Menerima pesan
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const text = msg.text;
 
-  // Abaikan pesan kosong / perintah
+  // Mengabaikan perintah
   if (!text || text.startsWith("/")) {
     return;
   }
@@ -98,32 +70,28 @@ bot.on("message", (msg) => {
   const nomorMatch = text.match(/nomor\s*:\s*(.+)/i);
   const keteranganMatch = text.match(/keterangan\s*:\s*(.+)/i);
 
-  // Format tidak sesuai
+  // Jika format tidak sesuai
   if (!namaMatch || !nomorMatch) {
     return;
   }
 
   const nama = namaMatch[1].trim();
   const nomor = nomorMatch[1].trim();
-
   const keterangan = keteranganMatch
     ? keteranganMatch[1].trim()
     : "-";
 
   const tanggal = new Date().toLocaleString("id-ID");
 
-  // ==============================
-  // SIMPAN DATA
-  // ==============================
-
+  // Menyimpan data
   db.run(
-    `INSERT INTO data
+    `INSERT INTO data 
     (user_id, nama, nomor, keterangan, tanggal)
     VALUES (?, ?, ?, ?, ?)`,
-    [String(userId), nama, nomor, keterangan, tanggal],
+    [userId, nama, nomor, keterangan, tanggal],
     function (err) {
       if (err) {
-        console.log("❌ Database error:", err);
+        console.log(err);
 
         bot.sendMessage(
           chatId,
@@ -150,16 +118,12 @@ bot.on("message", (msg) => {
   );
 });
 
-// ==============================
-// REKAP
-// ==============================
-
+// Perintah /rekap
 bot.onText(/\/rekap/, (msg) => {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
 
-  // Hanya OWNER_IDS yang boleh melihat semua data
-  if (!isOwner(userId)) {
+  // Hanya owner yang dapat melihat seluruh data
+  if (OWNER_ID && String(msg.from.id) !== String(OWNER_ID)) {
     bot.sendMessage(
       chatId,
       "❌ Anda tidak memiliki akses untuk melihat seluruh rekap data."
@@ -173,8 +137,6 @@ bot.onText(/\/rekap/, (msg) => {
     [],
     (err, rows) => {
       if (err) {
-        console.log(err);
-
         bot.sendMessage(
           chatId,
           "❌ Terjadi kesalahan mengambil data."
@@ -206,10 +168,9 @@ bot.onText(/\/rekap/, (msg) => {
 `;
       });
 
-      // Batas Telegram
+      // Telegram memiliki batas panjang pesan
       if (hasil.length > 4000) {
         hasil = hasil.substring(0, 4000);
-        hasil += "\n\n⚠️ Rekap terlalu panjang, sebagian data tidak ditampilkan.";
       }
 
       bot.sendMessage(chatId, hasil, {
@@ -219,10 +180,7 @@ bot.onText(/\/rekap/, (msg) => {
   );
 });
 
-// ==============================
-// TOTAL DATA
-// ==============================
-
+// Perintah /total
 bot.onText(/\/total/, (msg) => {
   const chatId = msg.chat.id;
 
@@ -231,11 +189,7 @@ bot.onText(/\/total/, (msg) => {
     [],
     (err, row) => {
       if (err) {
-        bot.sendMessage(
-          chatId,
-          "❌ Terjadi kesalahan."
-        );
-
+        bot.sendMessage(chatId, "❌ Terjadi kesalahan.");
         return;
       }
 
@@ -247,13 +201,9 @@ bot.onText(/\/total/, (msg) => {
         }
       );
     }
-  );
 });
 
-// ==============================
-// ERROR POLLING
-// ==============================
-
+// Menampilkan kesalahan polling
 bot.on("polling_error", (error) => {
   console.log("Polling error:", error.message);
 });
