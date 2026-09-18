@@ -3,16 +3,17 @@ require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const sqlite3 = require("sqlite3").verbose();
 
-const TOKEN = process.env.BOT_TOKEN;
-const OWNER_ID = process.env.OWNER_ID;
+const TOKEN = process.env.TELEGRAM_TOKEN;
+const ADMIN_ID = process.env.ADMIN_ID;
+
 const MAX_DATA = 30;
 
 if (!TOKEN) {
-    throw new Error("BOT_TOKEN belum diatur!");
+    throw new Error("TELEGRAM_TOKEN belum diatur!");
 }
 
-if (!OWNER_ID) {
-    throw new Error("OWNER_ID belum diatur!");
+if (!ADMIN_ID) {
+    throw new Error("ADMIN_ID belum diatur!");
 }
 
 const bot = new TelegramBot(TOKEN, {
@@ -89,7 +90,7 @@ function menuUtama() {
 
 bot.onText(/\/start/, (msg) => {
 
-    if (String(msg.from.id) !== String(OWNER_ID)) {
+    if (String(msg.from.id) !== String(ADMIN_ID)) {
         return;
     }
 
@@ -108,7 +109,7 @@ bot.on("message", (msg) => {
     const userId = msg.from.id;
     const text = msg.text;
 
-    if (String(userId) !== String(OWNER_ID)) {
+    if (String(userId) !== String(ADMIN_ID)) {
         return;
     }
 
@@ -268,7 +269,7 @@ bot.on("callback_query", (query) => {
     const userId = query.from.id;
 
 
-    if (String(userId) !== String(OWNER_ID)) {
+    if (String(userId) !== String(ADMIN_ID)) {
 
         return bot.answerCallbackQuery(
             query.id,
