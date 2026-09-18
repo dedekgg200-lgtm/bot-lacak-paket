@@ -5,205 +5,389 @@ const sqlite3 = require("sqlite3").verbose();
 
 const TOKEN = process.env.BOT_TOKEN;
 const OWNER_ID = process.env.OWNER_ID;
+const MAX_DATA = 30;
 
 if (!TOKEN) {
-  console.log("BOT_TOKEN belum diatur di file .env");
-  process.exit(1);
+    throw new Error("BOT_TOKEN belum diatur!");
+}
+
+if (!OWNER_ID) {
+    throw new Error("OWNER_ID belum diatur!");
 }
 
 const bot = new TelegramBot(TOKEN, {
-  polling: true
+    polling: true
 });
 
-// Membuat database
 const db = new sqlite3.Database("./data.db");
 
-// Membuat tabel data
 db.run(`
-  CREATE TABLE IF NOT EXISTS data (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    nama TEXT,
-    nomor TEXT,
-    keterangan TEXT,
-    tanggal TEXT
-  )
+    CREATE TABLE IF NOT EXISTS paket (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        resi TEXT,
+        penerima TEXT,
+        pengirim TEXT,
+        alamat TEXT,
+        telepon TEXT
+    )
 `);
 
-console.log("🤖 Bot Rekap Data berhasil dijalankan");
+console.log("🤖 Bot Rekap Data sedang berjalan...");
 
-// Perintah /start
+
+function ambilData(text) {
+
+    const resi =
+        text.match(/(?:No Resi|Nomor Resi)\s*:\s*([0-9]+)/i)?.[1] || "";
+
+    const pengirim =
+        text.match(
+            /🚀\s*Pengirim[\s\S]*?├\s*(.*?)\s*└/i
+        )?.[1]?.trim() || "";
+
+    const penerima =
+        text.match(
+            /🚩\s*Penerima[\s\S]*?├\s*(.*?)\s*└/i
+        )?.[1]
+        ?.replace(/[:*]/g, "")
+        .trim() || "";
+
+    const alamat =
+        text.match(
+            /🚩\s*Penerima[\s\S]*?└\s*(.*?)(?:\n|⏩)/i
+        )?.[1]?.trim() || "";
+
+    const telepon =
+        text.match(
+            /(?:📞\s*Telepon|Telepon)\s*:\s*([0-9+\-\s]+)/i
+        )?.[1]
+        ?.replace(/\s/g, "") || "";
+
+    return {
+        resi,
+        penerima,
+        pengirim,
+        alamat,
+        telepon
+    };
+}
+
+
+function menuUtama() {
+
+    return {
+        reply_markup: {
+            keyboard: [
+                ["📋 Ambil Rekapan"]
+            ],
+            resize_keyboard: true
+        }
+    };
+
+}
+
+
 bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
 
-  const pesan = `
-Halo 👋
-
-Selamat datang di *Bot Rekap Data* 📋
-
-Untuk menambahkan data, gunakan format berikut:
-
-*Nama:* Nama Anda
-*Nomor:* 08123456789
-*Keterangan:* Contoh keterangan
-
-Kirim data tersebut dalam satu pesan.
-  `;
-
-  bot.sendMessage(chatId, pesan, {
-    parse_mode: "Markdown"
-  });
-});
-
-// Menerima pesan
-bot.on("message", (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
-  const text = msg.text;
-
-  // Mengabaikan perintah
-  if (!text || text.startsWith("/")) {
-    return;
-  }
-
-  const namaMatch = text.match(/nama\s*:\s*(.+)/i);
-  const nomorMatch = text.match(/nomor\s*:\s*(.+)/i);
-  const keteranganMatch = text.match(/keterangan\s*:\s*(.+)/i);
-
-  // Jika format tidak sesuai
-  if (!namaMatch || !nomorMatch) {
-    return;
-  }
-
-  const nama = namaMatch[1].trim();
-  const nomor = nomorMatch[1].trim();
-  const keterangan = keteranganMatch
-    ? keteranganMatch[1].trim()
-    : "-";
-
-  const tanggal = new Date().toLocaleString("id-ID");
-
-  // Menyimpan data
-  db.run(
-    `INSERT INTO data 
-    (user_id, nama, nomor, keterangan, tanggal)
-    VALUES (?, ?, ?, ?, ?)`,
-    [userId, nama, nomor, keterangan, tanggal],
-    function (err) {
-      if (err) {
-        console.log(err);
-
-        bot.sendMessage(
-          chatId,
-          "❌ Terjadi kesalahan saat menyimpan data."
-        );
-
+    if (String(msg.from.id) !== String(OWNER_ID)) {
         return;
-      }
-
-      const pesanBerhasil = `
-✅ *DATA BERHASIL DISIMPAN*
-
-*ID Data:* ${this.lastID}
-*Nama:* ${nama}
-*Nomor:* ${nomor}
-*Keterangan:* ${keterangan}
-*Tanggal:* ${tanggal}
-      `;
-
-      bot.sendMessage(chatId, pesanBerhasil, {
-        parse_mode: "Markdown"
-      });
     }
-  );
-});
 
-// Perintah /rekap
-bot.onText(/\/rekap/, (msg) => {
-  const chatId = msg.chat.id;
-
-  // Hanya owner yang dapat melihat seluruh data
-  if (OWNER_ID && String(msg.from.id) !== String(OWNER_ID)) {
     bot.sendMessage(
-      chatId,
-      "❌ Anda tidak memiliki akses untuk melihat seluruh rekap data."
+        msg.chat.id,
+        "👋 Bot Rekap Data siap digunakan.\n\nLangsung kirim data paket ke bot.",
+        menuUtama()
     );
 
-    return;
-  }
-
-  db.all(
-    `SELECT * FROM data ORDER BY id DESC`,
-    [],
-    (err, rows) => {
-      if (err) {
-        bot.sendMessage(
-          chatId,
-          "❌ Terjadi kesalahan mengambil data."
-        );
-
-        return;
-      }
-
-      if (rows.length === 0) {
-        bot.sendMessage(
-          chatId,
-          "📭 Belum ada data yang tersimpan."
-        );
-
-        return;
-      }
-
-      let hasil = `📋 *REKAP DATA*\n\n`;
-
-      rows.forEach((data) => {
-        hasil += `
-*ID:* ${data.id}
-*Nama:* ${data.nama}
-*Nomor:* ${data.nomor}
-*Keterangan:* ${data.keterangan}
-*Tanggal:* ${data.tanggal}
-
-━━━━━━━━━━━━━━
-`;
-      });
-
-      // Telegram memiliki batas panjang pesan
-      if (hasil.length > 4000) {
-        hasil = hasil.substring(0, 4000);
-      }
-
-      bot.sendMessage(chatId, hasil, {
-        parse_mode: "Markdown"
-      });
-    }
-  );
 });
 
-// Perintah /total
-bot.onText(/\/total/, (msg) => {
-  const chatId = msg.chat.id;
 
-  db.get(
-    `SELECT COUNT(*) AS total FROM data`,
-    [],
-    (err, row) => {
-      if (err) {
-        bot.sendMessage(chatId, "❌ Terjadi kesalahan.");
+bot.on("message", (msg) => {
+
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const text = msg.text;
+
+    if (String(userId) !== String(OWNER_ID)) {
         return;
-      }
+    }
 
-      bot.sendMessage(
-        chatId,
-        `📊 *Total Data Tersimpan:* ${row.total}`,
-        {
-          parse_mode: "Markdown"
+    if (!text) {
+        return;
+    }
+
+    if (text === "/start") {
+        return;
+    }
+
+
+    if (text === "📋 Ambil Rekapan") {
+
+        db.all(
+            "SELECT * FROM paket ORDER BY id ASC",
+            [],
+            (err, rows) => {
+
+                if (err) {
+                    return bot.sendMessage(
+                        chatId,
+                        "❌ Terjadi kesalahan saat mengambil data."
+                    );
+                }
+
+                if (rows.length === 0) {
+                    return bot.sendMessage(
+                        chatId,
+                        "📭 Belum ada data yang tersimpan."
+                    );
+                }
+
+
+                const buttons = [];
+                let baris = [];
+
+
+                for (let i = 1; i <= rows.length; i++) {
+
+                    baris.push({
+                        text: String(i),
+                        callback_data: `ambil_${i}`
+                    });
+
+
+                    if (
+                        baris.length === 5 ||
+                        i === rows.length
+                    ) {
+
+                        buttons.push(baris);
+                        baris = [];
+
+                    }
+
+                }
+
+
+                bot.sendMessage(
+                    chatId,
+                    `📦 Data tersedia: ${rows.length}\n\nPilih jumlah data yang ingin diambil:`,
+                    {
+                        reply_markup: {
+                            inline_keyboard: buttons
+                        }
+                    }
+                );
+
+            }
+        );
+
+        return;
+    }
+
+
+    const data = ambilData(text);
+
+
+    if (!data.resi || !data.penerima) {
+
+        return bot.sendMessage(
+            chatId,
+            "❌ Data tidak dapat dibaca.\n\nPastikan nomor resi dan nama penerima ada."
+        );
+
+    }
+
+
+    db.get(
+        "SELECT COUNT(*) AS total FROM paket",
+        [],
+        (err, result) => {
+
+            if (err) {
+
+                return bot.sendMessage(
+                    chatId,
+                    "❌ Terjadi kesalahan."
+                );
+
+            }
+
+
+            if (result.total >= MAX_DATA) {
+
+                return bot.sendMessage(
+                    chatId,
+                    `⚠️ Penyimpanan penuh (${MAX_DATA}/${MAX_DATA}).\n\nSilakan ambil data terlebih dahulu.`
+                );
+
+            }
+
+
+            db.run(
+                `
+                INSERT INTO paket
+                (resi, penerima, pengirim, alamat, telepon)
+                VALUES (?, ?, ?, ?, ?)
+                `,
+                [
+                    data.resi,
+                    data.penerima,
+                    data.pengirim,
+                    data.alamat,
+                    data.telepon
+                ],
+                (err) => {
+
+                    if (err) {
+
+                        return bot.sendMessage(
+                            chatId,
+                            "❌ Data gagal disimpan."
+                        );
+
+                    }
+
+
+                    bot.sendMessage(
+                        chatId,
+                        `✅ Data berhasil disimpan.\n📦 Total data: ${result.total + 1}/${MAX_DATA}`
+                    );
+
+                }
+            );
+
         }
-      );
-    }
+    );
+
 });
 
-// Menampilkan kesalahan polling
-bot.on("polling_error", (error) => {
-  console.log("Polling error:", error.message);
+
+bot.on("callback_query", (query) => {
+
+    const chatId = query.message.chat.id;
+    const userId = query.from.id;
+
+
+    if (String(userId) !== String(OWNER_ID)) {
+
+        return bot.answerCallbackQuery(
+            query.id,
+            {
+                text: "Tidak memiliki akses."
+            }
+        );
+
+    }
+
+
+    if (!query.data.startsWith("ambil_")) {
+        return;
+    }
+
+
+    const jumlah = Number(
+        query.data.replace("ambil_", "")
+    );
+
+
+    db.all(
+        "SELECT * FROM paket ORDER BY id ASC LIMIT ?",
+        [jumlah],
+        async (err, rows) => {
+
+            if (err || rows.length === 0) {
+
+                return bot.sendMessage(
+                    chatId,
+                    "❌ Data tidak ditemukan."
+                );
+
+            }
+
+
+            try {
+
+                for (const data of rows) {
+
+                    const rekap =
+`*Halo kk*
+
+Kami ingin mengonfirmasi paket dengan data berikut:
+
+*Nomor Resi*: ${data.resi}
+*Nama Penerima*: ${data.penerima}
+*Nama Pengirim/Toko*: ${data.pengirim}
+*Alamat*: ${data.alamat}
+
+Terima kasih.`;
+
+
+                    await bot.sendMessage(
+                        chatId,
+                        rekap
+                    );
+
+
+                    if (data.telepon) {
+
+                        await bot.sendMessage(
+                            chatId,
+                            data.telepon
+                        );
+
+                    }
+
+
+                    await new Promise(
+                        (resolve, reject) => {
+
+                            db.run(
+                                "DELETE FROM paket WHERE id = ?",
+                                [data.id],
+                                (err) => {
+
+                                    if (err) {
+                                        reject(err);
+                                    } else {
+                                        resolve();
+                                    }
+
+                                }
+                            );
+
+                        }
+                    );
+
+                }
+
+
+                await bot.answerCallbackQuery(
+                    query.id,
+                    {
+                        text: `${rows.length} data berhasil dikirim.`
+                    }
+                );
+
+
+                bot.sendMessage(
+                    chatId,
+                    `✅ ${rows.length} data berhasil dikirim dan dihapus dari penyimpanan.`,
+                    menuUtama()
+                );
+
+
+            } catch (error) {
+
+                console.error(error);
+
+                bot.sendMessage(
+                    chatId,
+                    "❌ Terjadi kesalahan saat mengirim data."
+                );
+
+            }
+
+        }
+    );
+
 });
