@@ -1,0 +1,14 @@
+{
+  "name": "bot-rekap-data",
+  "version": "1.0.0",
+  "description": "Bot Telegram untuk rekap data",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "node-telegram-bot-api": "^0.66.0",
+    "sqlite3": "^5.1.7"
+  }
+}
